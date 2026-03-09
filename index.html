@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOTP & TOTP Interactive Demo with Code</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .otp-font { font-family: 'JetBrains Mono', monospace; letter-spacing: 0.2em; }
+        .code-font { font-family: 'JetBrains Mono', monospace; }
+        .progress-bar { transition: width 1s linear; }
+        pre { scrollbar-width: thin; scrollbar-color: #475569 transparent; }
+        
+        /* Updated code container logic for visibility */
+        .code-container { 
+            min-height: 430px;
+            display: flex;
+            flex-direction: column;
+        }
+        pre {
+            flex-grow: 1;
+            white-space: pre-wrap; /* Allows code to wrap if container is too narrow */
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-10 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-slate-200 pb-6">
+            <div class="text-center md:text-left">
+                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">OTP Mechanism Visualizer</h1>
+                <p class="text-slate-500 text-sm mt-1">Understanding HMAC-based and Time-based One Time Passwords</p>
+            </div>
+            
+            <a href="https://github.com/innoaya/totp" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-full hover:bg-slate-800 transition-all shadow-md group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="group-hover:scale-110 transition-transform"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-4.5a4.5 4.5 0 0 0-1-3 5 5 0 0 0-1-3.5s-.9-.3-3 1.3a12.9 12.9 0 0 0-7 0c-2.1-1.6-3-1.3-3-1.3A5 5 0 0 0 4 7a4.5 4.5 0 0 0-1 3c0 2.5 3 4.5 6 4.5-.8.7-1 1.7-1 2.5V22"></path></svg>
+                <span class="font-semibold text-sm">View on GitHub</span>
+            </a>
+        </header>
+
+        <!-- Shared Secret Key Section -->
+        <div class="bg-slate-100 rounded-2xl p-6 mb-8 border border-slate-200">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-white rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-[10px] font-bold text-slate-400 uppercase mb-1">Shared Secret Key (K)</h3>
+                        <code id="secret-key" class="text-lg font-mono text-slate-700 tracking-wider">JBSWY3DPEHPK3PXP</code>
+                    </div>
+                    <button onclick="changeSecret()" class="bg-white hover:bg-slate-50 text-slate-600 font-bold px-4 py-2 rounded-xl border border-slate-300 transition-colors shadow-sm text-sm">Change Secret</button>
+                </div>
+                <div class="text-right">
+                    <p class="text-[14px] text-slate-400 leading-tight max-w-[400px]">
+                        The secret key is the shared root of trust. Both client and server use it to derive identical OTPs.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-8 items-stretch">
+            
+            <!-- HOTP Section -->
+            <div class="flex flex-col h-full space-y-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                            <h2 class="text-xl font-bold text-blue-600">1. HOTP (RFC 4226)</h2>
+                        </div>
+                        <span class="px-2 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded">Event-based</span>
+                    </div>
+                    
+                    <div class="space-y-4 mt-auto mb-auto">
+                        <div class="bg-slate-100 p-4 rounded-xl text-center border border-slate-200">
+                            <div class="text-xs text-slate-400 uppercase font-bold mb-1">Current Counter (C)</div>
+                            <div id="hotp-counter" class="text-2xl font-bold text-slate-700">0</div>
+                        </div>
+
+                        <div class="bg-slate-900 p-8 rounded-xl text-center text-white relative group overflow-hidden">
+                            <div class="text-xs text-slate-500 uppercase font-bold mb-2">HOTP Result</div>
+                            <div id="hotp-display" class="text-4xl otp-font font-bold text-blue-400">------</div>
+                        </div>
+
+                        <button onclick="generateNextHOTP()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-200">
+                            Generate Next OTP (Counter++)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- HOTP Code Snippet -->
+                <div class="bg-slate-800 rounded-2xl p-4 shadow-inner code-container">
+                    <div class="text-[10px] text-slate-500 uppercase font-bold mb-2 flex justify-between items-center border-b border-slate-700 pb-2">
+                        <span>Algorithm: JS + CryptoJS</span>
+                        <span class="text-blue-400">Step: HMAC -> Truncate</span>
+                    </div>
+                    <pre class="text-[12px] leading-relaxed text-blue-100 code-font p-2">
+function generateHOTP(secret, counter) {
+  // 1. Counter to 8-byte hex
+  let hex = counter.toString(16).padStart(16,'0');
+  let msg = CryptoJS.enc.Hex.parse(hex);
+  
+  // 2. HMAC-SHA1
+  let hmac = CryptoJS.HmacSHA1(msg, secret);
+  let hash = hmac.toString(CryptoJS.enc.Hex);
+  
+  // 3. Dynamic Truncation
+  let offset = parseInt(hash.slice(-1), 16);
+  let pHash = hash.slice(offset*2, offset*2+8);
+  let bin = parseInt(pHash, 16) & 0x7fffffff;
+  
+  // 4. Extract 6 digits
+  let otp = bin % 1000000;
+  return otp.toString().padStart(6,'0');
+}</pre>
+                </div>
+            </div>
+
+            <!-- TOTP Section -->
+            <div class="flex flex-col h-full space-y-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <h2 class="text-xl font-bold text-emerald-600">2. TOTP (RFC 6238)</h2>
+                        </div>
+                        <span class="px-2 py-1 bg-emerald-50 text-emerald-600 text-xs font-bold rounded">Time-based</span>
+                    </div>
+                    
+                    <div class="space-y-4 mt-auto mb-auto">
+                        <div class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+                            <div class="flex justify-between text-xs text-slate-400 uppercase font-bold mb-2">
+                                <span>Time Window</span>
+                                <span id="totp-timer" class="text-slate-600 font-mono">30s remaining</span>
+                            </div>
+                            <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                                <div id="totp-progress" class="progress-bar bg-emerald-500 h-full" style="width: 100%"></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 p-8 rounded-xl text-center text-white overflow-hidden">
+                            <div class="text-xs text-slate-500 uppercase font-bold mb-2">TOTP Result</div>
+                            <div id="totp-display" class="text-4xl otp-font font-bold text-emerald-400">------</div>
+                        </div>
+
+                        <div class="p-4 rounded-xl border border-dashed border-slate-200 text-center bg-slate-50">
+                            <div class="text-[10px] text-slate-400 uppercase font-bold mb-1">Derived Counter (T/30)</div>
+                            <div id="totp-counter" class="text-sm font-mono text-slate-600">00000000</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TOTP Code Snippet -->
+                <div class="bg-slate-800 rounded-2xl p-4 shadow-inner code-container">
+                    <div class="text-[10px] text-slate-500 uppercase font-bold mb-2 flex justify-between items-center border-b border-slate-700 pb-2">
+                        <span>Algorithm: JS + CryptoJS</span>
+                        <span class="text-emerald-400">Step: Time -> HOTP</span>
+                    </div>
+                    <pre class="text-[12px] leading-relaxed text-emerald-100 code-font p-2">
+function generateTOTP(secret) {
+  // 1. Get Unix Time in seconds
+  let now = Math.floor(Date.now() / 1000);
+  
+  // 2. Create Counter (Time / 30)
+  // Which 30s slot are we in?
+  let counter = Math.floor(now / 30);
+  
+  // 3. Use HOTP with Time Counter
+  // TOTP is just HOTP using Time
+  return generateHOTP(secret, counter);
+}</pre>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- CryptoJS for HMAC-SHA1 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script>
+        let currentSecret = "JBSWY3DPEHPK3PXP";
+        let hotpCounter = 0;
+
+        function generateHOTP(secret, counter) {
+            let hexCounter = counter.toString(16).padStart(16, '0');
+            let counterWords = CryptoJS.enc.Hex.parse(hexCounter);
+            let hmac = CryptoJS.HmacSHA1(counterWords, secret);
+            let hash = hmac.toString(CryptoJS.enc.Hex);
+            let offset = parseInt(hash.substring(hash.length - 1), 16);
+            let pHash = hash.substring(offset * 2, offset * 2 + 8);
+            let binary = parseInt(pHash, 16) & 0x7fffffff;
+            let otp = binary % 1000000;
+            return otp.toString().padStart(6, '0');
+        }
+
+        function generateNextHOTP() {
+            hotpCounter++;
+            document.getElementById('hotp-counter').innerText = hotpCounter;
+            const otp = generateHOTP(currentSecret, hotpCounter);
+            const display = document.getElementById('hotp-display');
+            display.innerText = otp;
+            display.parentElement.classList.add('bg-blue-900');
+            setTimeout(() => display.parentElement.classList.remove('bg-blue-900'), 150);
+        }
+
+        function updateTOTP() {
+            const now = Math.floor(Date.now() / 1000);
+            const period = 30;
+            const counter = Math.floor(now / period);
+            const remaining = period - (now % period);
+            const otp = generateHOTP(currentSecret, counter);
+            
+            document.getElementById('totp-display').innerText = otp;
+            document.getElementById('totp-counter').innerText = counter;
+            document.getElementById('totp-timer').innerText = `${remaining}s remaining`;
+            
+            const percent = (remaining / period) * 100;
+            const progressBar = document.getElementById('totp-progress');
+            progressBar.style.width = `${percent}%`;
+            
+            if (remaining <= 5) {
+                progressBar.classList.replace('bg-emerald-500', 'bg-red-500');
+            } else {
+                progressBar.classList.replace('bg-red-500', 'bg-emerald-500');
+            }
+        }
+
+        function changeSecret() {
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+            let res = "";
+            for(let i=0; i<16; i++) res += chars.charAt(Math.floor(Math.random() * chars.length));
+            currentSecret = res;
+            document.getElementById('secret-key').innerText = res;
+            hotpCounter = 0;
+            document.getElementById('hotp-counter').innerText = '0';
+            document.getElementById('hotp-display').innerText = '------';
+            updateTOTP();
+        }
+
+        window.onload = () => {
+            setInterval(updateTOTP, 1000);
+            updateTOTP();
+        };
+    </script>
+</body>
+</html>
